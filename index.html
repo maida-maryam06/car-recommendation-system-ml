@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AutoSense – Car Recommendation System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<style>
+/* ── RESET & VARIABLES ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0b0e17;
+  --surface:  #111624;
+  --card:     #161c2e;
+  --border:   #232a42;
+  --accent:   #4f8ef7;
+  --accent2:  #6fcf97;
+  --accent3:  #f2c94c;
+  --danger:   #eb5757;
+  --text:     #e8eaf0;
+  --muted:    #7a82a0;
+  --radius:   14px;
+  --radius-sm:8px;
+  --shadow:   0 8px 32px rgba(0,0,0,.45);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: "DM Sans", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Noise grain */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+  opacity: .5;
+}
+
+/* Radial glow */
+.hero-glow {
+  position: fixed; top: -220px; left: 50%; transform: translateX(-50%);
+  width: 900px; height: 600px;
+  background: radial-gradient(ellipse at 50% 30%,
+    rgba(79,142,247,.16) 0%, rgba(111,207,151,.07) 55%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+
+/* ── LAYOUT ─────────────────────────────────────────────────────── */
+.wrapper { position: relative; z-index: 1; max-width: 1100px; margin: auto; padding: 48px 24px 100px; }
+
+/* ── HERO ───────────────────────────────────────────────────────── */
+.hero { text-align: center; margin-bottom: 56px; }
+.hero h1 {
+  font-family: "Syne", sans-serif; font-weight: 800;
+  font-size: clamp(2.4rem, 5.5vw, 4rem); line-height: 1.06;
+  letter-spacing: -1.5px; margin-bottom: 16px; color: #fff;
+}
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero p {
+  color: var(--muted); font-size: 1.05rem;
+  max-width: 500px; margin: 0 auto 0; line-height: 1.65;
+}
+
+/* ── TRAIN ROW ──────────────────────────────────────────────────── */
+.train-row {
+  display: flex; gap: 14px; justify-content: center;
+  flex-wrap: wrap; margin-bottom: 28px;
+}
+
+/* ── BUTTONS ────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 13px 26px; border-radius: var(--radius-sm); border: none;
+  font-family: "DM Sans", sans-serif; font-weight: 500; font-size: .95rem;
+  cursor: pointer; transition: all .2s ease; white-space: nowrap;
+}
+.btn-primary   { background: var(--accent); color: #fff; box-shadow: 0 0 20px rgba(79,142,247,.3); }
+.btn-primary:hover { background: #6fa3ff; transform: translateY(-2px); box-shadow: 0 0 32px rgba(79,142,247,.5); }
+.btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); transform: translateY(-2px); }
+.btn-danger    { background: var(--surface); color: var(--accent3); border: 1px solid var(--border); }
+.btn-danger:hover { border-color: var(--accent3); transform: translateY(-2px); }
+.btn:disabled  { opacity: .45; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+.spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── STATUS BAR ─────────────────────────────────────────────────── */
+.status-bar { display: flex; gap: 10px; align-items: center; justify-content: center; margin-bottom: 40px; font-size: .82rem; flex-wrap: wrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #333c55; flex-shrink: 0; }
+.dot.on { background: var(--accent2); box-shadow: 0 0 8px rgba(111,207,151,.65); }
+
+/* ── LOG ────────────────────────────────────────────────────────── */
+#log {
+  background: #080b12; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px 18px; font-family: "Fira Code", "DM Mono", monospace;
+  font-size: .76rem; color: var(--accent2); max-height: 140px; overflow-y: auto;
+  margin-bottom: 36px; white-space: pre-wrap; line-height: 1.7;
+}
+
+/* ── MAIN GRID ──────────────────────────────────────────────────── */
+.main-grid {
+  display: grid; grid-template-columns: 1fr 1.35fr; gap: 24px;
+  align-items: start; margin-bottom: 56px;
+}
+@media(max-width:760px) { .main-grid { grid-template-columns: 1fr; } }
+
+/* ── CARD ───────────────────────────────────────────────────────── */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); }
+.card-title { font-family: "Syne", sans-serif; font-weight: 700; font-size: 1rem; margin-bottom: 20px; color: #fff; display: flex; align-items: center; gap: 10px; }
+.card-title .icon { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; font-size: .95rem; background: rgba(79,142,247,.14); }
+
+/* ── FORM ───────────────────────────────────────────────────────── */
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; letter-spacing: .3px; }
+select {
+  width: 100%; padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: "DM Sans", sans-serif; font-size: .9rem;
+  appearance: none; cursor: pointer; transition: border-color .2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a82a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+select:focus { outline: none; border-color: var(--accent); }
+select option { background: var(--surface); }
+
+/* ── RESULT PANEL ───────────────────────────────────────────────── */
+.result-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px; margin-top: 18px; display: none; animation: fadeUp .4s ease; }
+.result-panel.show { display: block; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.result-badge { font-family: "Syne", sans-serif; font-weight: 700; font-size: 1.15rem; margin-bottom: 6px; }
+.result-meta  { font-size: .8rem; color: var(--muted); }
+.vgood { color: var(--accent2); }
+.good  { color: var(--accent); }
+.acc   { color: var(--accent3); }
+.unacc { color: var(--danger); }
+
+/* ── PIPELINE STEPS ─────────────────────────────────────────────── */
+.pipeline-steps { display: flex; flex-direction: column; gap: 9px; font-size: .86rem; color: var(--muted); line-height: 1.55; }
+.step-no { color: var(--accent); font-weight: 600; min-width: 22px; }
+.step-row { display: flex; gap: 8px; }
+
+/* ── SECTION TITLE ──────────────────────────────────────────────── */
+.section-title {
+  font-family: "Syne", sans-serif; font-weight: 700; font-size: 1.3rem;
+  margin-bottom: 24px; color: #fff; display: flex; align-items: center; gap: 14px;
+}
+.section-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* ── TABS ───────────────────────────────────────────────────────── */
+.tabs { display: flex; gap: 4px; margin-bottom: 22px; flex-wrap: wrap; }
+.tab { padding: 8px 18px; border-radius: var(--radius-sm); cursor: pointer; font-size: .87rem; font-weight: 500; transition: all .2s; border: 1px solid transparent; color: var(--muted); }
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tab:not(.active):hover { border-color: var(--border); color: var(--text); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── IMAGE GRID ─────────────────────────────────────────────────── */
+.img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+.img-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.img-card-title { font-size: .78rem; color: var(--muted); padding: 10px 14px 8px; text-transform: uppercase; letter-spacing: .7px; font-weight: 600; }
+.img-card img { width: 100%; display: block; }
+
+/* Download button under each chart */
+.img-card-footer { padding: 8px 14px; display: flex; justify-content: flex-end; }
+.dl-btn { font-size: .74rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; font-family: "DM Sans", sans-serif; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="hero-glow"></div>
+
+<div class="wrapper">
+
+  <!-- HERO (no badge, no nav) -->
+  <div class="hero">
+    <h1>Smart <em>Car</em><br>Recommendation</h1>
+    <p>End-to-end ML pipeline — clustering, feature selection, imbalance handling, and boosting ensembles.</p>
+  </div>
+
+  <!-- STATUS -->
+  <div class="status-bar">
+    <div class="dot" id="dot-ds1"></div>
+    <span id="lbl-ds1" style="color:var(--muted)">DS1 not trained</span>
+    <div style="width:24px;height:1px;background:var(--border);"></div>
+    <div class="dot" id="dot-ds2"></div>
+    <span id="lbl-ds2" style="color:var(--muted)">DS2 not trained</span>
+  </div>
+
+  <!-- TRAIN BUTTONS -->
+  <div class="train-row">
+    <button class="btn btn-primary"   id="btn-ds1" onclick="trainDS1()">🧠 Train DS1 – Car Evaluation</button>
+    <button class="btn btn-secondary" id="btn-ds2" onclick="trainDS2()">📊 Train DS2 – Craigslist</button>
+  </div>
+
+  <!-- LOG -->
+  <div id="log">» Awaiting training commands…</div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- Recommendation form -->
+    <div class="card">
+      <div class="card-title"><span class="icon">🚗</span> Get a Recommendation</div>
+
+      <div class="form-group"><label>Buying Price</label>
+        <select id="buying"><option value="vhigh">Very High</option><option value="high">High</option><option value="med" selected>Medium</option><option value="low">Low</option></select></div>
+
+      <div class="form-group"><label>Maintenance Cost</label>
+        <select id="maint"><option value="vhigh">Very High</option><option value="high">High</option><option value="med" selected>Medium</option><option value="low">Low</option></select></div>
+
+      <div class="form-group"><label>Number of Doors</label>
+        <select id="doors"><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5more">5+</option></select></div>
+
+      <div class="form-group"><label>Persons Capacity</label>
+        <select id="persons"><option value="2">2</option><option value="4" selected>4</option><option value="more">More</option></select></div>
+
+      <div class="form-group"><label>Luggage Boot</label>
+        <select id="lug_boot"><option value="small">Small</option><option value="med" selected>Medium</option><option value="big">Big</option></select></div>
+
+      <div class="form-group"><label>Safety Rating</label>
+        <select id="safety"><option value="low">Low</option><option value="med" selected>Medium</option><option value="high">High</option></select></div>
+
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px;" onclick="getRecommendation()">🔍 Recommend</button>
+
+      <div class="result-panel" id="result-panel">
+        <div class="result-badge" id="result-badge"></div>
+        <div class="result-meta"  id="result-meta"></div>
+      </div>
+    </div>
+
+    <!-- Info card -->
+    <div>
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title"><span class="icon">📋</span> Datasets</div>
+        <table style="width:100%;border-collapse:collapse;font-size:.86rem;">
+          <tr><th style="text-align:left;padding:8px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.7px;">DS</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.7px;">Dataset</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.7px;">Rows</th></tr>
+          <tr><td style="padding:10px 10px;">DS1</td><td style="padding:10px 10px;">Car Evaluation (UCI)</td><td style="padding:10px 10px;color:var(--accent2);">1,728</td></tr>
+          <tr><td style="padding:10px 10px;">DS2</td><td style="padding:10px 10px;">Craigslist Cars & Trucks</td><td style="padding:10px 10px;color:var(--accent2);">~426K</td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span class="icon">⚙️</span> Pipeline</div>
+        <div class="pipeline-steps">
+          <div class="step-row"><span class="step-no">1.</span><span>Preprocessing — Label Encoding + Standard Scaling</span></div>
+          <div class="step-row"><span class="step-no">2.</span><span>Unsupervised — KMeans + Agglomerative (Silhouette, DB Index)</span></div>
+          <div class="step-row"><span class="step-no">3.</span><span>Feature Selection — SelectKBest (Mutual Information)</span></div>
+          <div class="step-row"><span class="step-no">4.</span><span>Imbalance — SMOTE + RandomOverSampler</span></div>
+          <div class="step-row"><span class="step-no">5.</span><span>Classifiers — LR, DT, RF, Gradient Boosting ⭐, AdaBoost ⭐</span></div>
+          <div class="step-row"><span class="step-no">6.</span><span>DS2 Feature Extraction — PCA + SelectKBest MI</span></div>
+          <div class="step-row"><span class="step-no">7.</span><span>DS2 Classification — RF + Gradient Boosting on PCA features</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DS1 RESULTS -->
+  <div id="ds1-results" class="hidden">
+    <div class="section-title">DS1 · Results</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('ds1','clustering')">Clustering</div>
+      <div class="tab" onclick="switchTab('ds1','features')">Feature Selection</div>
+      <div class="tab" onclick="switchTab('ds1','imbalance')">Imbalance</div>
+      <div class="tab" onclick="switchTab('ds1','classifiers')">Classifiers</div>
+      <div class="tab" onclick="switchTab('ds1','confusion')">Confusion Matrices</div>
+    </div>
+
+    <div class="tab-pane active" id="ds1-tab-clustering">
+      <div class="img-grid" id="ds1-imgs-clustering"></div>
+    </div>
+    <div class="tab-pane" id="ds1-tab-features">
+      <div class="img-grid" id="ds1-imgs-features"></div>
+    </div>
+    <div class="tab-pane" id="ds1-tab-imbalance">
+      <div class="img-grid" id="ds1-imgs-imbalance"></div>
+    </div>
+    <div class="tab-pane" id="ds1-tab-classifiers">
+      <div class="img-grid" id="ds1-imgs-classifiers"></div>
+    </div>
+    <div class="tab-pane" id="ds1-tab-confusion">
+      <div class="img-grid" id="ds1-imgs-confusion"></div>
+    </div>
+  </div>
+
+  <!-- DS2 RESULTS -->
+  <div id="ds2-results" class="hidden" style="margin-top:48px;">
+    <div class="section-title">DS2 · Results</div>
+    <div class="img-grid" id="ds2-imgs"></div>
+  </div>
+
+</div><!-- /wrapper -->
+
+<script>
+const API = "http://localhost:5000";
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function log(msg) {
+  const el = document.getElementById("log");
+  el.textContent += "\n» " + msg;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Tab switch ────────────────────────────────────────────────────────────────
+function switchTab(ds, name) {
+  const prefix = ds + "-tab-";
+  document.querySelectorAll(`[id^="${prefix}"]`).forEach(p =>
+    p.classList.toggle("active", p.id === prefix + name));
+
+  // Highlight correct tab button
+  const tabsEl = document.getElementById(ds + "-results").querySelectorAll(".tab");
+  const names  = ds === "ds1"
+    ? ["clustering","features","imbalance","classifiers","confusion"]
+    : [];
+  tabsEl.forEach((t, i) => t.classList.toggle("active", names[i] === name));
+}
+
+// ── Image helpers ─────────────────────────────────────────────────────────────
+function makeImgCard(fname, b64) {
+  const label = fname.replace(/^\d+_/, "").replace(".png","").replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
+  const div = document.createElement("div");
+  div.className = "img-card";
+  div.innerHTML = `
+    <div class="img-card-title">${label}</div>
+    <img src="data:image/png;base64,${b64}" alt="${label}"/>
+    <div class="img-card-footer">
+      <button class="dl-btn" onclick="downloadImg('${fname}', '${b64}')">⬇ Download</button>
+    </div>`;
+  return div;
+}
+
+function downloadImg(name, b64) {
+  const a = document.createElement("a");
+  a.href = "data:image/png;base64," + b64;
+  a.download = name;
+  a.click();
+}
+
+// Map filename → tab bucket
+function ds1Bucket(fname) {
+  if (fname.includes("class_dist"))          return "clustering";
+  if (fname.includes("elbow") || fname.includes("cluster_val")) return "clustering";
+  if (fname.includes("feature_sel"))         return "features";
+  if (fname.includes("imbalance"))           return "imbalance";
+  if (fname.includes("accuracy") || fname.includes("all_metric")) return "classifiers";
+  if (fname.startsWith("cm_"))               return "confusion";
+  return "classifiers";
+}
+
+// ── Train DS1 ─────────────────────────────────────────────────────────────────
+async function trainDS1() {
+  const btn = document.getElementById("btn-ds1");
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Training…';
+  log("Starting DS1 pipeline — Car Evaluation dataset…");
+  log("Downloading via kagglehub (first run may take a moment)…");
+
+  try {
+    const r = await fetch(API + "/api/train/ds1", { method: "POST" });
+    const d = await r.json();
+    if (d.status !== "success") throw new Error(d.message);
+
+    log("DS1 complete ✓  Best classifier: " + d.best_classifier);
+    document.getElementById("dot-ds1").classList.add("on");
+    document.getElementById("lbl-ds1").style.color = "var(--accent2)";
+    document.getElementById("lbl-ds1").textContent = "DS1 trained ✓";
+
+    // Clear containers
+    ["clustering","features","imbalance","classifiers","confusion"].forEach(b =>
+      document.getElementById("ds1-imgs-" + b).innerHTML = "");
+
+    // Populate images into correct tabs
+    Object.entries(d.images).forEach(([fname, b64]) => {
+      const bucket = ds1Bucket(fname);
+      const container = document.getElementById("ds1-imgs-" + bucket);
+      if (container) container.appendChild(makeImgCard(fname, b64));
+    });
+
+    document.getElementById("ds1-results").classList.remove("hidden");
+
+  } catch(e) {
+    log("ERROR: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "✅ DS1 Trained";
+  }
+}
+
+// ── Train DS2 ─────────────────────────────────────────────────────────────────
+async function trainDS2() {
+  const btn = document.getElementById("btn-ds2");
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Training…';
+  log("Starting DS2 pipeline — Craigslist (50K rows sampled)…");
+
+  try {
+    const r = await fetch(API + "/api/train/ds2", { method: "POST" });
+    const d = await r.json();
+    if (d.status !== "success") throw new Error(d.message);
+
+    log("DS2 complete ✓");
+    if (d.results) {
+      Object.entries(d.results).forEach(([name, m]) =>
+        log(`  ${name}: acc=${(m.accuracy*100).toFixed(1)}%  f1=${(m.f1*100).toFixed(1)}%`));
+    }
+
+    document.getElementById("dot-ds2").classList.add("on");
+    document.getElementById("lbl-ds2").style.color = "var(--accent2)";
+    document.getElementById("lbl-ds2").textContent = "DS2 trained ✓";
+
+    const container = document.getElementById("ds2-imgs");
+    container.innerHTML = "";
+    Object.entries(d.images).forEach(([fname, b64]) =>
+      container.appendChild(makeImgCard(fname, b64)));
+
+    document.getElementById("ds2-results").classList.remove("hidden");
+
+  } catch(e) {
+    log("ERROR: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "✅ DS2 Trained";
+  }
+}
+
+// ── Recommend ─────────────────────────────────────────────────────────────────
+async function getRecommendation() {
+  const payload = {
+    buying:   document.getElementById("buying").value,
+    maint:    document.getElementById("maint").value,
+    doors:    document.getElementById("doors").value,
+    persons:  document.getElementById("persons").value,
+    lug_boot: document.getElementById("lug_boot").value,
+    safety:   document.getElementById("safety").value,
+  };
+
+  try {
+    const r = await fetch(API + "/api/recommend", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.error) { log("ERROR: " + d.error); return; }
+
+    const cls = { vgood:"vgood", good:"good", acc:"acc", unacc:"unacc" }[d.prediction] || "acc";
+    const badge = document.getElementById("result-badge");
+    badge.className = "result-badge " + cls;
+    badge.textContent = d.description;
+    document.getElementById("result-meta").textContent = "Model: " + d.model_used;
+    document.getElementById("result-panel").classList.add("show");
+    log("Recommendation → " + d.description);
+  } catch(e) {
+    log("ERROR (is server.py running?): " + e.message);
+  }
+}
+
+// ── Status on load ────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch(API + "/api/status");
+    const d = await r.json();
+    if (d.ds1_trained) {
+      document.getElementById("dot-ds1").classList.add("on");
+      document.getElementById("lbl-ds1").textContent = "DS1 trained ✓";
+      document.getElementById("lbl-ds1").style.color = "var(--accent2)";
+    }
+    if (d.ds2_trained) {
+      document.getElementById("dot-ds2").classList.add("on");
+      document.getElementById("lbl-ds2").textContent = "DS2 trained ✓";
+      document.getElementById("lbl-ds2").style.color = "var(--accent2)";
+    }
+  } catch(_) {}
+})();
+</script>
+</body>
+</html>
